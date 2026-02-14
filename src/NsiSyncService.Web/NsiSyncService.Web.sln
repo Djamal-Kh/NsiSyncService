@@ -2,6 +2,10 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NsiSyncService.Web", "NsiSyncService.Web\NsiSyncService.Web.csproj", "{4FC40248-9EA5-4BF1-825D-FEA89E648CF3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NsiSyncService.Core", "NsiSyncService.Core\NsiSyncService.Core.csproj", "{6E8C6823-A9F3-4C5B-A697-BB419A1D820D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NsiSyncService.Infrastructure", "NsiSyncService.Infrastructure\NsiSyncService.Infrastructure.csproj", "{43B0612D-1A83-49B2-974E-03C8B35DA65F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +16,13 @@ Global
 		{4FC40248-9EA5-4BF1-825D-FEA89E648CF3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4FC40248-9EA5-4BF1-825D-FEA89E648CF3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4FC40248-9EA5-4BF1-825D-FEA89E648CF3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6E8C6823-A9F3-4C5B-A697-BB419A1D820D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E8C6823-A9F3-4C5B-A697-BB419A1D820D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E8C6823-A9F3-4C5B-A697-BB419A1D820D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E8C6823-A9F3-4C5B-A697-BB419A1D820D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{43B0612D-1A83-49B2-974E-03C8B35DA65F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43B0612D-1A83-49B2-974E-03C8B35DA65F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43B0612D-1A83-49B2-974E-03C8B35DA65F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{43B0612D-1A83-49B2-974E-03C8B35DA65F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
