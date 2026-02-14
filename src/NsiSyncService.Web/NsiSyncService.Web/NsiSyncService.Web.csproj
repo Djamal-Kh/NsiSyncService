@@ -11,10 +11,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Controllers\" />
-    </ItemGroup>
-
-    <ItemGroup>
       <ProjectReference Include="..\NsiSyncService.Core\NsiSyncService.Core.csproj" />
       <ProjectReference Include="..\NsiSyncService.Infrastructure\NsiSyncService.Infrastructure.csproj" />
     </ItemGroup>
