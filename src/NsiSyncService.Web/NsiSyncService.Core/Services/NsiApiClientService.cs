@@ -1,0 +1,81 @@
+﻿using System.Net.Http.Json;
+using Microsoft.Extensions.Logging;
+using NsiSyncService.Core.DTOs.VersionsDto;
+using NsiSyncService.Core.Interfaces;
+
+namespace NsiSyncService.Core.Services;
+
+public class NsiApiClientService : INsiApiClientService
+{
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<NsiApiClientService> _logger;
+    
+    public NsiApiClientService(HttpClient httpClient, ILogger<NsiApiClientService> logger)
+    {
+        _httpClient = httpClient;
+        _logger = logger;
+    }
+    
+    public async Task<VersionsResponseDto> GetVersionsFromApiAsync(
+        string identifier,
+        CancellationToken cancellationToken, 
+        int page = 1, 
+        int size = 200)
+    {
+        var url = $"https://nsi.ffoms.ru/nsi-int/api/versions?identifier={identifier}&page={page}&size={size}";
+
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            _logger.LogError("API вернуло ошибку {StatusCode}. Тело ответа: {Content}", response.StatusCode, errorContent);
+            return new VersionsResponseDto { List = new List<VersionInfoDto>() };
+        }
+        
+        var result = await response.Content.ReadFromJsonAsync<VersionsResponseDto>(cancellationToken);
+        
+        return result ?? new VersionsResponseDto { List = new List<VersionInfoDto>() };
+    }
+
+    public async Task<VersionInfoDto> GetLastVersionFromApiAsync(string identifier, CancellationToken cancellationToken)
+    {
+        var allVersions = new List<VersionInfoDto>();
+        var page = 1;
+        var pageSize = 200;
+        var totalPages = 1;
+
+        do
+        {
+            var response = await GetVersionsFromApiAsync(identifier, cancellationToken, page, pageSize);
+            
+            if (response.List != null && response.List.Any())
+            {
+                allVersions.AddRange(response.List);
+                
+                // Вычисляем общее количество страниц
+                if (response.Total > 0)
+                {
+                    totalPages = (int)Math.Ceiling(response.Total / (double)pageSize);
+                }
+            }
+            else
+            {
+                break;
+            }
+
+            page++;
+            
+            // Небольшая задержка между запросами
+            if (page <= totalPages)
+            {
+                await Task.Delay(500);
+            }
+
+        } while (page <= totalPages);
+
+        return allVersions
+            .OrderByDescending(v => v.PublishDate)
+            .FirstOrDefault();
+    }
+}

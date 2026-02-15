@@ -5,16 +5,17 @@ public class Dictionary
     public string Code { get; }
     public string Name { get; }
     public string CurrentVersion { get; private set; }
+    public string JsonData { get;  }
     public DateTime LastUpdate { get;  private set; }
-    public string Law { get;  }
+
     
-    public Dictionary(string code, string name, string currentVersion, DateTime lastUpdate, string law)
+    public Dictionary(string code, string name, string currentVersion, DateTime lastUpdate, string jsonData)
     {
         Code = code;
         Name = name;
         CurrentVersion = currentVersion;
+        JsonData = jsonData;
         LastUpdate = lastUpdate;
-        Law = law;
     }
 
     public bool NeedToUpdateVersion(string newVersion)
