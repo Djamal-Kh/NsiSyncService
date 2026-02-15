@@ -16,8 +16,7 @@ public class NsiSyncWorker : BackgroundService
     private readonly List<string> _referenceIdentifiers = new() 
     { 
         // тестовый список для проверки версий у этих документов
-        "F001", "F000" , "F002", "F003", "F004", "F005", "N015", "V017"
-        //"F002"
+        "F001", "V022" , "F000" , "F002", "F003", "F004", "V042", "F005", "N015", "V017"
     };
     
     public NsiSyncWorker(DbInitializer dbInitializer, IServiceProvider serviceProvider, ILogger<NsiSyncWorker> logger)
@@ -42,12 +41,11 @@ public class NsiSyncWorker : BackgroundService
         {
             try
             {
-                _logger.LogInformation("Начало работы со внешним API");
-                
                 foreach (var identifier in _referenceIdentifiers)
                 {
                     try
                     {
+                        _logger.LogInformation("Work with Api. Processed identifier: {identifier}", identifier);
                         using var scope = _serviceProvider.CreateScope();
 
                         var syncProvider = scope.ServiceProvider.GetRequiredService<ISyncProvider>();
@@ -58,12 +56,7 @@ public class NsiSyncWorker : BackgroundService
 
                     catch (ResourceNotFoundException)
                     {
-                        _logger.LogError("API information is empty");
-                    }
-
-                    catch (DirectoryNotFoundException)
-                    {
-                        _logger.LogError("Attempt to find a record with an invalid identifier");
+                        _logger.LogError("Failed to retrieve data from external API. Identifier: {Identifier}", identifier);
                     }
                     
                     catch (Exception e)

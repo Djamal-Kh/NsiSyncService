@@ -9,6 +9,7 @@ public record VersionInfoDto()
     public PassportDto Passport { get; set; }
     public bool Archive { get; set; }
 
+    // Метод для преобразования предполагаемой даты из string в DateTime
     public DateTime CreateDateTime =>
         DateTime.TryParse(CreateDate, out DateTime createDateTime)
             ? createDateTime

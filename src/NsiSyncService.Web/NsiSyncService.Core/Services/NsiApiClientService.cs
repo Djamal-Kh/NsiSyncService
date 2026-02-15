@@ -17,28 +17,6 @@ public class NsiApiClientService : INsiApiClientService
         _logger = logger;
     }
     
-    public async Task<VersionsRequestDto> GetVersionsFromApiAsync(
-        string identifier,
-        CancellationToken cancellationToken, 
-        int page = 1, 
-        int size = 200)
-    {
-        var url = $"https://nsi.ffoms.ru/nsi-int/api/versions?identifier={identifier}&page={page}&size={size}";
-
-        var response = await _httpClient.GetAsync(url, cancellationToken);
-        
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorContent = await response.Content.ReadAsStringAsync();
-            _logger.LogError("API вернуло ошибку {StatusCode}. Тело ответа: {Content}", response.StatusCode, errorContent);
-            return new VersionsRequestDto { List = new List<VersionInfoDto>() };
-        }
-        
-        var result = await response.Content.ReadFromJsonAsync<VersionsRequestDto>(cancellationToken);
-        
-        return result ?? new VersionsRequestDto { List = new List<VersionInfoDto>() };
-    }
-
     public async Task<VersionInfoDto> GetLastVersionFromApiAsync(string identifier, CancellationToken cancellationToken)
     {
         var allVersions = new List<VersionInfoDto>();
@@ -81,5 +59,26 @@ public class NsiApiClientService : INsiApiClientService
             .FirstOrDefault();
     }
     
-    
+    public async Task<VersionsRequestDto> GetVersionsFromApiAsync(
+        string identifier,
+        CancellationToken cancellationToken, 
+        int page = 1, 
+        int size = 200)
+    {
+        var url = $"https://nsi.ffoms.ru/nsi-int/api/versions?identifier={identifier}&page={page}&size={size}";
+
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        
+        // Если статус код не "Ok" (200)
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            _logger.LogError("API вернуло ошибку {StatusCode}. Тело ответа: {Content}", response.StatusCode, errorContent);
+            return new VersionsRequestDto { List = new List<VersionInfoDto>() };
+        }
+        
+        var result = await response.Content.ReadFromJsonAsync<VersionsRequestDto>(cancellationToken);
+        
+        return result ?? new VersionsRequestDto { List = new List<VersionInfoDto>() };
+    }
 }

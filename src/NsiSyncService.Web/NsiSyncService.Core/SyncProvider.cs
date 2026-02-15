@@ -18,30 +18,39 @@ public class SyncProvider : ISyncProvider
 
     public async Task SyncReferenceAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        // вызвать _nsiApiClientService и получить актуальную версию из API
+        // Ищем запись из внешнего API
         var latestApiRecords = await _nsiApiClientService.GetLastVersionFromApiAsync(identifier, cancellationToken);
         
-        _logger.LogInformation("Latest version from API: {Version}", latestApiRecords.Version);
+        _logger.LogInformation("Latest version record with identifier = {identifier} from API: {Version}", 
+            identifier, latestApiRecords.Version);
         
-        // вызвать _nsiDirectoryService и получить актуальную версию из БД
+        // Ищем запись в БД
         var currentDbVersions = await _nsiDirectoryRepository.GetLastVersionFromDbAsync(identifier, cancellationToken);
 
+        // Если запись не встречается в БД, то тогда добавляем ее в БД
         if (currentDbVersions is null)
         {
             await _nsiDirectoryRepository.InsertRecordToDb(identifier, latestApiRecords, cancellationToken);
             return;
         }
         
-        // если же в бд нашлась подобная запись, то сравниваем их
+        // Если записи из API и из БД совпадают, то ничего не меняем
         if (latestApiRecords.Version == currentDbVersions)
         {
-            _logger.LogInformation("Version in the Db is latest");
+            _logger.LogInformation("Version {version} in the record with identifier = {identifier} latest", 
+                currentDbVersions, identifier);
             return;
         }
         
+        // Если же все-таки записи не совпадают, значит в API находится более актуальная информация, 
+        // поэтому надо обновить записи в таблицах
         await _nsiDirectoryRepository.RotateDirectoryDataAsync(identifier, latestApiRecords, cancellationToken);
-        _logger.LogInformation("Update Record in Database. Directory latest version: {newVersion}, arhived version: {oldVersion}", 
-            latestApiRecords.Version, currentDbVersions);
+        
+        _logger.LogInformation("Update Record in Database with identifier = {identifier}. " +
+                               "Directory latest version: {newVersion}, arhived version: {oldVersion}", 
+            identifier, latestApiRecords.Version, currentDbVersions);
+        
+        return;
     }
 }
 
