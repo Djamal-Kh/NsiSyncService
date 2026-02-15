@@ -1,6 +1,7 @@
 ﻿using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
-using NsiSyncService.Core.DTOs.VersionsDto;
+using NsiSyncService.Core.DTOs;
+using NsiSyncService.Core.Extensions.ExceptionExtensions;
 using NsiSyncService.Core.Interfaces;
 
 namespace NsiSyncService.Core.Services;
@@ -16,7 +17,7 @@ public class NsiApiClientService : INsiApiClientService
         _logger = logger;
     }
     
-    public async Task<VersionsResponseDto> GetVersionsFromApiAsync(
+    public async Task<VersionsRequestDto> GetVersionsFromApiAsync(
         string identifier,
         CancellationToken cancellationToken, 
         int page = 1, 
@@ -30,12 +31,12 @@ public class NsiApiClientService : INsiApiClientService
         {
             var errorContent = await response.Content.ReadAsStringAsync();
             _logger.LogError("API вернуло ошибку {StatusCode}. Тело ответа: {Content}", response.StatusCode, errorContent);
-            return new VersionsResponseDto { List = new List<VersionInfoDto>() };
+            return new VersionsRequestDto { List = new List<VersionInfoDto>() };
         }
         
-        var result = await response.Content.ReadFromJsonAsync<VersionsResponseDto>(cancellationToken);
+        var result = await response.Content.ReadFromJsonAsync<VersionsRequestDto>(cancellationToken);
         
-        return result ?? new VersionsResponseDto { List = new List<VersionInfoDto>() };
+        return result ?? new VersionsRequestDto { List = new List<VersionInfoDto>() };
     }
 
     public async Task<VersionInfoDto> GetLastVersionFromApiAsync(string identifier, CancellationToken cancellationToken)
@@ -53,7 +54,6 @@ public class NsiApiClientService : INsiApiClientService
             {
                 allVersions.AddRange(response.List);
                 
-                // Вычисляем общее количество страниц
                 if (response.Total > 0)
                 {
                     totalPages = (int)Math.Ceiling(response.Total / (double)pageSize);
@@ -66,7 +66,6 @@ public class NsiApiClientService : INsiApiClientService
 
             page++;
             
-            // Небольшая задержка между запросами
             if (page <= totalPages)
             {
                 await Task.Delay(500);
@@ -74,8 +73,13 @@ public class NsiApiClientService : INsiApiClientService
 
         } while (page <= totalPages);
 
+        if(!allVersions.Any())
+            throw new ResourceNotFoundException();
+        
         return allVersions
-            .OrderByDescending(v => v.PublishDate)
+            .OrderByDescending(v => v.CreateDateTime)
             .FirstOrDefault();
     }
+    
+    
 }

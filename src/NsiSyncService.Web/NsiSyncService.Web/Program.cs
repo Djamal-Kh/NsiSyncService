@@ -23,9 +23,10 @@ builder.Services.AddHttpClient<INsiApiClientService, NsiApiClientService>(client
 
 builder.Services.AddTransient<DbInitializer>();
 builder.Services.AddHostedService<NsiSyncWorker>();
-builder.Services.AddScoped<INsiDirectoryService, NsiDirectoryService>();
 builder.Services.AddScoped<ISyncProvider, SyncProvider>();
 builder.Services.AddScoped<INsiDirectoryRepository, NsiDirectoryRepository>();
+builder.Services.AddScoped<IDbConnectionFactory, SqlServerConnectionFactory>();
+
 
 var app = builder.Build();
 

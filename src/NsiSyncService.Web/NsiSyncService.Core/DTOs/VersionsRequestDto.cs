@@ -1,6 +1,6 @@
-﻿namespace NsiSyncService.Core.DTOs.VersionsDto;
+﻿namespace NsiSyncService.Core.DTOs;
 
-public record VersionsResponseDto()
+public record VersionsRequestDto()
 {
     public string Result { get; set; }
     public string ResultText { get; set; }

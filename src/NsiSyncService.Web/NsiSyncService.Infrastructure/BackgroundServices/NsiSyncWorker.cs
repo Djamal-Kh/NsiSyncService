@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NsiSyncService.Core;
+using NsiSyncService.Core.Extensions.ExceptionExtensions;
 using NsiSyncService.Core.Interfaces;
 
 namespace NsiSyncService.Infrastructure.BackgroundServices;
@@ -15,7 +16,8 @@ public class NsiSyncWorker : BackgroundService
     private readonly List<string> _referenceIdentifiers = new() 
     { 
         // тестовый список для проверки версий у этих документов
-        "F017", "F018", "F019" 
+        "F001", "F000" , "F002", "F003", "F004", "F005", "N015", "V017"
+        //"F002"
     };
     
     public NsiSyncWorker(DbInitializer dbInitializer, IServiceProvider serviceProvider, ILogger<NsiSyncWorker> logger)
@@ -44,12 +46,31 @@ public class NsiSyncWorker : BackgroundService
                 
                 foreach (var identifier in _referenceIdentifiers)
                 {
-                    using var scope = _serviceProvider.CreateScope();
+                    try
+                    {
+                        using var scope = _serviceProvider.CreateScope();
+
+                        var syncProvider = scope.ServiceProvider.GetRequiredService<ISyncProvider>();
+                        await syncProvider.SyncReferenceAsync(identifier, stoppingToken);
+
+                        await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
+                    }
+
+                    catch (ResourceNotFoundException)
+                    {
+                        _logger.LogError("API information is empty");
+                    }
+
+                    catch (DirectoryNotFoundException)
+                    {
+                        _logger.LogError("Attempt to find a record with an invalid identifier");
+                    }
                     
-                    var syncProvider = scope.ServiceProvider.GetRequiredService<ISyncProvider>();
-                    await syncProvider.SyncReferenceAsync(identifier, stoppingToken);
-                    
-                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                    catch (Exception e)
+                    {
+                        _logger.LogCritical(e, "Unhandled exception");
+                        throw;
+                    }
                 }
             }
             catch (Exception e)

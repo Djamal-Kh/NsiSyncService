@@ -1,4 +1,4 @@
-﻿namespace NsiSyncService.Core;
+﻿namespace NsiSyncService.Core.Interfaces;
 
 public interface ISyncProvider
 {
