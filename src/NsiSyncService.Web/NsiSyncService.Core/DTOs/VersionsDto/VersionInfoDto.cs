@@ -3,14 +3,14 @@
 public record VersionInfoDto()
 {
     public string Version { get; set; }
-    public DateTime CreateDate { get; set; }
-    public DateTime PublishDate { get; set; }
-    public DateTime LastUpdate { get; set; }
-    public Passport Passport { get; set; }
+    public string CreateDate { get; set; }
+    public string PublishDate { get; set; }
+    public string LastUpdate { get; set; }
+    public PassportDto Passport { get; set; }
     public bool Archive { get; set; }
 }
 
-public record Passport()
+public record PassportDto()
 {
     public string Type { get; set; }
     public string Version { get; set; }
