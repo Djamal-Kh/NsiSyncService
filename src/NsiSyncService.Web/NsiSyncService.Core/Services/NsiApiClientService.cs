@@ -82,13 +82,39 @@ public class NsiApiClientService : INsiApiClientService
         return result ?? new VersionsRequestDto { List = new List<VersionInfoDto>() };
     }
 
-    public Task<StructureDto> GetStructureFromApiAsync(string identifier, CancellationToken cancellationToken)
+    public async Task<StructureDto> GetStructureFromApiAsync(string identifier, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var url = $"https://nsi.ffoms.ru/nsi-int/api/structure?identifier={identifier}";
+        
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            _logger.LogError("API вернуло ошибку {StatusCode}. Тело ответа: {Content}", response.StatusCode, errorContent);
+            return new StructureDto();
+        }
+        
+        var result = await response.Content.ReadFromJsonAsync<StructureDto>(cancellationToken);
+        
+        return result ?? new StructureDto();
     }
 
-    public Task<DataDto> GetDataFromApiAsync(string identifier, CancellationToken cancellationToken)
+    public async Task<DataDto> GetDataFromApiAsync(string identifier, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var url = $"https://nsi.ffoms.ru/nsi-int/api/data?identifier={identifier}&page=1&size=200";
+        
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync();
+            _logger.LogError("API вернуло ошибку {StatusCode}. Тело ответа: {Content}", response.StatusCode, errorContent);
+            return new DataDto();
+        }
+        
+        var result = await response.Content.ReadFromJsonAsync<DataDto>(cancellationToken);
+        
+        return result ?? new DataDto();
     }
 }
