@@ -81,4 +81,14 @@ public class NsiApiClientService : INsiApiClientService
         
         return result ?? new VersionsRequestDto { List = new List<VersionInfoDto>() };
     }
+
+    public Task<StructureDto> GetStructureFromApiAsync(string identifier, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<DataDto> GetDataFromApiAsync(string identifier, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
 }

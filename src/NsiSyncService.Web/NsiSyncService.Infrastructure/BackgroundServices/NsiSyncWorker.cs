@@ -39,38 +39,30 @@ public class NsiSyncWorker : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            try
+            foreach (var identifier in _referenceIdentifiers)
             {
-                foreach (var identifier in _referenceIdentifiers)
+                try
                 {
-                    try
-                    {
-                        _logger.LogInformation("Work with Api. Processed identifier: {identifier}", identifier);
-                        using var scope = _serviceProvider.CreateScope();
+                    _logger.LogInformation("Work with Api. Processed identifier: {identifier}", identifier);
+                    using var scope = _serviceProvider.CreateScope();
 
-                        var syncProvider = scope.ServiceProvider.GetRequiredService<ISyncProvider>();
-                        await syncProvider.SyncReferenceAsync(identifier, stoppingToken);
+                    var syncProvider = scope.ServiceProvider.GetRequiredService<ISyncProvider>();
+                    await syncProvider.SyncReferenceAsync(identifier, stoppingToken);
 
-                        await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
-                    }
+                    await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
+                }
 
-                    catch (ResourceNotFoundException)
-                    {
-                        _logger.LogError("Failed to retrieve data from external API. Identifier: {Identifier}", identifier);
-                    }
+                catch (ResourceNotFoundException)
+                {
+                    _logger.LogError("Failed to retrieve data from external API. Identifier: {Identifier}", identifier);
+                }
                     
-                    catch (Exception e)
-                    {
-                        _logger.LogCritical(e, "Unhandled exception");
-                        throw;
-                    }
+                catch (Exception e)
+                {
+                    _logger.LogCritical(e, "Unhandled exception");
+                    throw;
                 }
             }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Unhandled exception, что-то пошло не так");
-            }
-            
             await Task.Delay(TimeSpan.FromHours(1), stoppingToken);
         }
     }

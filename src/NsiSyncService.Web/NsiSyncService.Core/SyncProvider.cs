@@ -18,37 +18,38 @@ public class SyncProvider : ISyncProvider
 
     public async Task SyncReferenceAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        // Ищем запись из внешнего API
-        var latestApiRecords = await _nsiApiClientService.GetLastVersionFromApiAsync(identifier, cancellationToken);
+        // Ищем последнюю версию из API
+        var latestApiVersion = await _nsiApiClientService.GetLastVersionFromApiAsync(identifier, cancellationToken);
         
-        _logger.LogInformation("Latest version record with identifier = {identifier} from API: {Version}", 
-            identifier, latestApiRecords.Version);
-        
-        // Ищем запись в БД
-        var currentDbVersions = await _nsiDirectoryRepository.GetLastVersionFromDbAsync(identifier, cancellationToken);
+        // Ищем версию в БД
+        var currentDbVersion = await _nsiDirectoryRepository.GetLastVersionFromDbAsync(identifier, cancellationToken);
 
-        // Если запись не встречается в БД, то тогда добавляем ее в БД
-        if (currentDbVersions is null)
-        {
-            await _nsiDirectoryRepository.InsertRecordToDb(identifier, latestApiRecords, cancellationToken);
-            return;
-        }
-        
-        // Если записи из API и из БД совпадают, то ничего не меняем
-        if (latestApiRecords.Version == currentDbVersions)
+        // Если в БД есть соответствующие таблицы и версии с API и с БД совпадают, то переходим к следующему идентификатору
+        if (currentDbVersion is not null && latestApiVersion.Version == currentDbVersion)
         {
             _logger.LogInformation("Version {version} in the record with identifier = {identifier} latest", 
-                currentDbVersions, identifier);
+                currentDbVersion, identifier);
             return;
         }
         
-        // Если же все-таки записи не совпадают, значит в API находится более актуальная информация, 
-        // поэтому надо обновить записи в таблицах
-        await _nsiDirectoryRepository.RotateDirectoryDataAsync(identifier, latestApiRecords, cancellationToken);
+        // вытаскиваем данные из API для заполнения таблицы 
+        var dbDataForCreatingTable = await _nsiApiClientService.GetDataFromApiAsync(identifier, cancellationToken);
+
+        // если раннее не создавали БД
+        if (currentDbVersion is null)
+        {
+            var dbStructureForCreatingTable = await _nsiApiClientService.GetStructureFromApiAsync(identifier, cancellationToken);
+            await _nsiDirectoryRepository.CreateTableAsync(identifier, dbStructureForCreatingTable, cancellationToken);
+            await _nsiDirectoryRepository.InsertRecordToDbAsync(identifier, dbDataForCreatingTable, cancellationToken);
+            return;
+        }
+            
+        // если надо обновить данные в таблицах
+        await _nsiDirectoryRepository.RotateDirectoryDataAsync(identifier, latestApiVersion, dbDataForCreatingTable ,cancellationToken);
         
         _logger.LogInformation("Update Record in Database with identifier = {identifier}. " +
                                "Directory latest version: {newVersion}, arhived version: {oldVersion}", 
-            identifier, latestApiRecords.Version, currentDbVersions);
+            identifier, latestApiVersion.Version, currentDbVersion);
         
         return;
     }

@@ -33,17 +33,18 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         return record;
     }
 
-    public async Task InsertRecordToDb(string identifier, VersionInfoDto dto, CancellationToken cancellationToken)
+    public async Task InsertRecordToDbAsync(string identifier, DataDto dbData, CancellationToken cancellationToken)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync(cancellationToken);
 
+        /*
         const string sql =
             """
             Insert Into dbo.Directory_Actual (Code, Name, CurrentVersion, JsonData, LastUpdate) 
             VALUES (@DirectoryCode, @DirectoryName, @CurrentVersion, @JsonData, @LastUpdate)
             """;
-
-        var jsonData = JsonSerializer.Serialize(dto.Passport);
+        
+        var jsonData = JsonSerializer.Serialize(dbStructure.Passport);
         
         var param = new
         {
@@ -55,9 +56,10 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         };
         
         await connection.ExecuteAsync(sql, param);
+        */
     }
 
-    public async Task RotateDirectoryDataAsync(string identifier, VersionInfoDto dto, CancellationToken cancellationToken)
+    public async Task RotateDirectoryDataAsync(string identifier, VersionInfoDto dto, DataDto dbData, CancellationToken cancellationToken)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction();
@@ -99,5 +101,15 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
             transaction.Rollback();
             throw;
         }
+    }
+
+    public Task CreateTableAsync(string identifier, StructureDto dbStructure, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpdateTablesAsync(StructureDto dbStructure, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
     }
 }
