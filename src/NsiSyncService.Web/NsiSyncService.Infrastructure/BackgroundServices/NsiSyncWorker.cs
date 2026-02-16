@@ -26,17 +26,10 @@ public class NsiSyncWorker : BackgroundService
         _logger = logger;
     }
     
-    public override async Task StartAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Starting NsiSyncWorker");
         
-        await _dbInitializer.InitializeAsync(cancellationToken);
-        
-        await base.StartAsync(cancellationToken);
-    }
-    
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
         while (!stoppingToken.IsCancellationRequested)
         {
             foreach (var identifier in _referenceIdentifiers)

@@ -11,7 +11,7 @@ public interface INsiDirectoryRepository
     
     public Task RotateDirectoryDataAsync(string identifier, VersionInfoDto dbVersion, DataDto dbData , CancellationToken cancellationToken);
 
-    public Task CreateTableAsync(string identifier, StructureDto dbStructure, CancellationToken cancellationToken);
+    public Task CreateTablesAsync(string identifier, StructureDto dbStructure, CancellationToken cancellationToken);
 
     public Task UpdateTablesAsync(StructureDto dbStructure, CancellationToken cancellationToken);
 }

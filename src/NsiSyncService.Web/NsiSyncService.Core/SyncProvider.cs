@@ -39,7 +39,7 @@ public class SyncProvider : ISyncProvider
         if (currentDbVersion is null)
         {
             var dbStructureForCreatingTable = await _nsiApiClientService.GetStructureFromApiAsync(identifier, cancellationToken);
-            await _nsiDirectoryRepository.CreateTableAsync(identifier, dbStructureForCreatingTable, cancellationToken);
+            await _nsiDirectoryRepository.CreateTablesAsync(identifier, dbStructureForCreatingTable, cancellationToken);
             await _nsiDirectoryRepository.InsertRecordToDbAsync(identifier, dbDataForCreatingTable, cancellationToken);
             return;
         }
