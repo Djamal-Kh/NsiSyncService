@@ -16,7 +16,8 @@ public class NsiSyncWorker : BackgroundService
     private readonly List<string> _referenceIdentifiers = new() 
     { 
         // тестовый список для проверки версий у этих документов
-        "F001", "V022" , "F000" , "F002", "F003", "F004", "V042", "F005", "N015", "V017"
+        //"F001", "V022" , "F000" , "F002", "F003", "F004", "V042", "F005", "N015", "V017"
+        "F001", "V022" , "F000" , "N015"
     };
     
     public NsiSyncWorker(DbInitializer dbInitializer, IServiceProvider serviceProvider, ILogger<NsiSyncWorker> logger)
