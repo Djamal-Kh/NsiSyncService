@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using Dapper;
+using Microsoft.Extensions.Logging;
 using NsiSyncService.Core.DTOs;
 using NsiSyncService.Core.Entities;
 using NsiSyncService.Core.Extensions;
@@ -10,10 +11,12 @@ namespace NsiSyncService.Infrastructure.Repositories;
 public class NsiDirectoryRepository : INsiDirectoryRepository
 {
     private readonly IDbConnectionFactory _dbConnectionFactory;
+    private readonly ILogger<NsiDirectoryRepository> _logger;
 
-    public NsiDirectoryRepository(IDbConnectionFactory dbConnectionFactory)
+    public NsiDirectoryRepository(IDbConnectionFactory dbConnectionFactory, ILogger<NsiDirectoryRepository> logger)
     {
         _dbConnectionFactory = dbConnectionFactory;
+        _logger = logger;
     }
 
     public async Task<string?> GetLastVersionFromDbAsync(string identifier, CancellationToken cancellationToken)
@@ -23,7 +26,7 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         const string sql =
             """
             SELECT CurrentVersion
-            FROM dbo.Directory_Actual  
+            FROM dbo.Directory_Actual_Version  
             WHERE Code = @DirectoryCode
             """;
 
@@ -34,30 +37,50 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         return record;
     }
 
-    public async Task InsertRecordToDbAsync(string identifier, DataDto dbData, CancellationToken cancellationToken)
+    public async Task InsertRecordToDbAsync(string identifier, DataDto dbData, StructureDto dbStructure, CancellationToken cancellationToken)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync(cancellationToken);
-
-        /*
-        const string sql =
-            """
-            Insert Into dbo.Directory_Actual (Code, Name, CurrentVersion, JsonData, LastUpdate) 
-            VALUES (@DirectoryCode, @DirectoryName, @CurrentVersion, @JsonData, @LastUpdate)
-            """;
+        using var transaction = connection.BeginTransaction();
         
-        var jsonData = JsonSerializer.Serialize(dbStructure.Passport);
+        var tableName = $"{identifier}_Actual";
         
-        var param = new
+        var existingInDb = dbStructure.Columns.Select(c => c.Name).ToList();
+        existingInDb.Add("SYS_RECORDID");
+        existingInDb.Add("SYS_HASH");
+        
+        // убираем столбцы, которых нет в structure, но есть в data
+        var columns = dbData.List.First()
+            .Select(x => x.Column)
+            .Where(c => existingInDb.Contains(c))
+            .ToList();
+        
+        var columnsSql = SqlMappingExtensions.ToSqlColumnsForInsert(columns);
+        
+        // переделать под List ?
+        // также здесь проходит фильтрация
+        var values = dbData.List.Select(row => 
+            row.Where(cell => columns.Contains(cell.Column))
+                .Select(x => x.Value));
+        
+        var valuesSql = SqlMappingExtensions.ToSqlValuesForInsert(values);
+        
+        string sql = @$"
+        INSERT INTO dbo.{tableName} ({columnsSql})
+        VALUES {valuesSql}";
+        
+        try
         {
-            DirectoryCode = identifier,
-            DirectoryName = dto.Passport.Name,
-            CurrentVersion = dto.Version,
-            JsonData = jsonData,
-            LastUpdate = dto.LastUpdate
-        };
-        
-        await connection.ExecuteAsync(sql, param);
-        */
+            // вместо Dapper тут использую ADO.NET т.к. с Dapper`ом начинается проблема из-за символа @
+            await connection.ExecuteAsync(sql, transaction: transaction);
+            
+            transaction.Commit();
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error inserting record to database");
+            transaction.Rollback();
+            throw;
+        }
     }
 
     public async Task RotateDirectoryDataAsync(string identifier, VersionInfoDto dto, DataDto dbData, CancellationToken cancellationToken)
@@ -97,8 +120,9 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
 
             transaction.Commit();
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            _logger.LogError(e, "Error inserting record to database");
             transaction.Rollback();
             throw;
         }
@@ -111,26 +135,27 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
 
         string actualTable = $"{identifier}_Actual";
         string historyTable = $"{identifier}_History";
-        string versionTable = $"{identifier}_Version";
         
         // переменная для добавления в таблицу динамического количества столбец
         var columnDefinitions = dbStructure.Columns.Select(c =>
         {
             string sqlType = SqlMappingExtensions.ToSqlType(c);
-            string nullabillity = c.EmptyAllowed ? "NULL" : "NOT NULL";
+            //string nullabillity = c.EmptyAllowed ? "NULL" : "NOT NULL"; - вынужденно т.к. даже если указано NOT NULL - приходили пустые значения
+            string nullabillity = "NULL";
             return $"[{c.Name}] {sqlType} {nullabillity}";
         });
         
-        string allColumnsSql = string.Join("," + Environment.NewLine, columnDefinitions);
+        string allColumnsSql = string.Join(",", columnDefinitions);
         
         // Жесткий костыль, небезопасно так писать
         string sql = $@"
         IF OBJECT_ID('{actualTable}') IS NULL
-        CREATE TABLE [{actualTable}]
+        CREATE TABLE {actualTable}
         (
             [Id] BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-            {allColumnsSql},
-            [VersionId] NVARCHAR(50) NOT NULL
+            [SYS_RECORDID] NVARCHAR(255) NULL, 
+            [SYS_HASH] NVARCHAR(255) NULL,
+            {allColumnsSql}
         );
 
         IF OBJECT_ID('{historyTable}') IS NULL
@@ -138,15 +163,8 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         (
             [Id] BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
             {allColumnsSql},
-            [VersionId] NVARCHAR(50) NOT NULL
-        );
-
-        IF OBJECT_ID('{versionTable}') IS NULL
-        CREATE TABLE [{versionTable}]
-        (
-            [Version] NVARCHAR(50) NOT NULL PRIMARY KEY,
-            [Create_Date] DATETIME DEFAULT GETDATE() NOT NULL,
-            [Archive_date] DATETIME DEFAULT GETDATE() NOT NULL
+            [VersionId] NVARCHAR(50) NOT NULL,
+            [Archived_Date] DATETIME NOT NULL
         );";
         
         try
@@ -155,15 +173,31 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
 
             transaction.Commit();
         }
-        catch (Exception)
+        catch (Exception e)
         {
+            _logger.LogError(e, "Error creating tables");
             transaction.Rollback();
             throw;
         }
     }
 
-    public Task UpdateTablesAsync(StructureDto dbStructure, CancellationToken cancellationToken)
+    public async Task AddVersionAsync(string identifier, VersionInfoDto dbVersion, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        using var connection = await _dbConnectionFactory.CreateConnectionAsync(cancellationToken);
+
+        const string sql =
+            """
+            INSERT INTO dbo.Directory_Actual_Version (Code, CurrentVersion, LastUpdate)
+            VALUES (@DirectoryCode, @Version, @LastUpdate)
+            """;
+        
+        var param = new
+        {
+            DirectoryCode = identifier,
+            Version = dbVersion.Version,
+            LastUpdate = dbVersion.LastUpdate
+        };
+        
+        await connection.ExecuteAsync(sql, param);
     }
 }

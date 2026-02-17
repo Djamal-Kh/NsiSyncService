@@ -18,10 +18,10 @@ public class SyncProvider : ISyncProvider
 
     public async Task SyncReferenceAsync(string identifier, CancellationToken cancellationToken = default)
     {
-        // Ищем последнюю версию из API
+        // Ищем последнюю версию из API - done
         var latestApiVersion = await _nsiApiClientService.GetLastVersionFromApiAsync(identifier, cancellationToken);
         
-        // Ищем версию в БД
+        // Ищем версию в БД - done
         var currentDbVersion = await _nsiDirectoryRepository.GetLastVersionFromDbAsync(identifier, cancellationToken);
 
         // Если в БД есть соответствующие таблицы и версии с API и с БД совпадают, то переходим к следующему идентификатору
@@ -32,7 +32,7 @@ public class SyncProvider : ISyncProvider
             return;
         }
         
-        // вытаскиваем данные из API для заполнения таблицы 
+        // вытаскиваем данные из API для заполнения таблицы - done
         var dbDataForCreatingTable = await _nsiApiClientService.GetDataFromApiAsync(identifier, cancellationToken);
 
         // если раннее не создавали БД
@@ -40,7 +40,8 @@ public class SyncProvider : ISyncProvider
         {
             var dbStructureForCreatingTable = await _nsiApiClientService.GetStructureFromApiAsync(identifier, cancellationToken);
             await _nsiDirectoryRepository.CreateTablesAsync(identifier, dbStructureForCreatingTable, cancellationToken);
-            await _nsiDirectoryRepository.InsertRecordToDbAsync(identifier, dbDataForCreatingTable, cancellationToken);
+            //await _nsiDirectoryRepository.AddVersionAsync(identifier, latestApiVersion, cancellationToken);
+            await _nsiDirectoryRepository.InsertRecordToDbAsync(identifier, dbDataForCreatingTable, dbStructureForCreatingTable, cancellationToken);
             return;
         }
             
