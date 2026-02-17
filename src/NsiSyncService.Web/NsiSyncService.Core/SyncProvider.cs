@@ -34,11 +34,11 @@ public class SyncProvider : ISyncProvider
         
         // вытаскиваем данные из API для заполнения таблицы - done
         var dbDataForCreatingTable = await _nsiApiClientService.GetDataFromApiAsync(identifier, cancellationToken);
+        var dbStructureForCreatingTable = await _nsiApiClientService.GetStructureFromApiAsync(identifier, cancellationToken);
 
         // если раннее не создавали БД
         if (currentDbVersion is null)
         {
-            var dbStructureForCreatingTable = await _nsiApiClientService.GetStructureFromApiAsync(identifier, cancellationToken);
             await _nsiDirectoryRepository.CreateTablesAsync(identifier, dbStructureForCreatingTable, cancellationToken);
             await _nsiDirectoryRepository.AddVersionAsync(identifier, latestApiVersion, cancellationToken);
             await _nsiDirectoryRepository.InsertRecordToDbAsync(identifier, dbDataForCreatingTable, dbStructureForCreatingTable, cancellationToken);
@@ -46,7 +46,7 @@ public class SyncProvider : ISyncProvider
         }
             
         // если надо обновить данные в таблицах
-        await _nsiDirectoryRepository.RotateDirectoryDataAsync(identifier, latestApiVersion, dbDataForCreatingTable ,cancellationToken);
+        await _nsiDirectoryRepository.RotateDirectoryDataAsync(identifier, latestApiVersion, currentDbVersion, dbStructureForCreatingTable, dbDataForCreatingTable, cancellationToken);
         
         _logger.LogInformation("Update Record in Database with identifier = {identifier}. " +
                                "Directory latest version: {newVersion}, arhived version: {oldVersion}", 

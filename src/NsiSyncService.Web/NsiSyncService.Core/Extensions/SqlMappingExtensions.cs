@@ -8,7 +8,7 @@ public static class SqlMappingExtensions
     {
         return columnsDto.DataType switch
         {
-            "VARCHAR" => $"NVARCHAR({(columnsDto.MaxLength > 0 ? columnsDto.MaxLength.ToString() : "MAX")})",
+            //"VARCHAR" => $"NVARCHAR({(columnsDto.MaxLength > 0 ? columnsDto.MaxLength.ToString() : "MAX")})",
             "INTEGER" => "INT",
             "DATE" => "DATE",
             _ => "NVARCHAR(MAX)"

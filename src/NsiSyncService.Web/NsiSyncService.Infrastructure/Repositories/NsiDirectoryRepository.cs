@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Data;
+using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.Logging;
 using NsiSyncService.Core.DTOs;
@@ -37,87 +38,132 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         return record;
     }
 
-    public async Task InsertRecordToDbAsync(string identifier, DataDto dbData, StructureDto dbStructure, CancellationToken cancellationToken)
+    public async Task InsertRecordToDbAsync(
+        string identifier, 
+        DataDto dbData, 
+        StructureDto dbStructure, 
+        CancellationToken cancellationToken = default, 
+        IDbConnection externalConnection = null, 
+        IDbTransaction externalTransaction = null)
+    {
+        IDbConnection connection = externalConnection;
+        
+        if (connection is null)
+            connection = await _dbConnectionFactory.CreateConnectionAsync(cancellationToken);
+        
+        try
+        {
+            bool isInternalTransaction = externalTransaction == null;
+            
+            IDbTransaction transaction = externalTransaction;
+            
+            if (transaction is null)
+                transaction = connection.BeginTransaction();
+
+            var tableName = $"{identifier}_Actual";
+
+            var existingInDb = dbStructure.Columns.Select(c => c.Name).ToList();
+            existingInDb.Add("SYS_RECORDID");
+            existingInDb.Add("SYS_HASH");
+
+            // убираем столбцы, которых нет в structure, но есть в data
+            var columns = dbData.List.First()
+                .Select(x => x.Column)
+                .Where(c => existingInDb.Contains(c))
+                .ToList();
+
+            var columnsSql = SqlMappingExtensions.ToSqlColumnsForInsert(columns);
+
+            // переделать под List ?
+            // также здесь проходит фильтрация
+            var values = dbData.List.Select(row =>
+                row.Where(cell => columns.Contains(cell.Column))
+                    .Select(x => x.Value));
+
+            var valuesSql = SqlMappingExtensions.ToSqlValuesForInsert(values);
+
+            string sql = @$"
+                INSERT INTO dbo.{tableName} ({columnsSql})
+                VALUES {valuesSql}";
+
+            try
+            {
+                // вместо Dapper тут использую ADO.NET т.к. с Dapper`ом начинается проблема из-за символа @
+                await connection.ExecuteAsync(sql, transaction: transaction);
+
+                if (isInternalTransaction) 
+                    transaction.Commit();
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error inserting record to database");
+                if (isInternalTransaction)
+                    transaction.Rollback();
+
+                throw;
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error inserting record to database");
+            throw;
+        }
+        finally
+        {
+            if (externalConnection == null)
+                connection.Dispose();
+        }
+    }
+
+    public async Task RotateDirectoryDataAsync(string identifier, VersionInfoDto apiVersion, string currentVersion, StructureDto dbStructure, DataDto dbData, CancellationToken cancellationToken)
     {
         using var connection = await _dbConnectionFactory.CreateConnectionAsync(cancellationToken);
         using var transaction = connection.BeginTransaction();
-        
-        var tableName = $"{identifier}_Actual";
+
+        string actualTableName = $"{identifier}_Actual";
+        string archiveTableName = $"{identifier}_History";
         
         var existingInDb = dbStructure.Columns.Select(c => c.Name).ToList();
         existingInDb.Add("SYS_RECORDID");
         existingInDb.Add("SYS_HASH");
         
-        // убираем столбцы, которых нет в structure, но есть в data
         var columns = dbData.List.First()
             .Select(x => x.Column)
             .Where(c => existingInDb.Contains(c))
             .ToList();
         
         var columnsSql = SqlMappingExtensions.ToSqlColumnsForInsert(columns);
+
+        string archiveTableSql = @$"
+            INSERT INTO dbo.{archiveTableName} ({columnsSql}, [Version], [Archive_Date])
+            SELECT {columnsSql}, {currentVersion}, GETDATE()
+            FROM dbo.{actualTableName} WITH (UPDLOCK, HOLDLOCK, ROWLOCK)";
+
+        string truncateActualTableSql = $@"
+            TRUNCATE TABLE dbo.[{actualTableName}]";
         
-        // переделать под List ?
-        // также здесь проходит фильтрация
-        var values = dbData.List.Select(row => 
-            row.Where(cell => columns.Contains(cell.Column))
-                .Select(x => x.Value));
-        
-        var valuesSql = SqlMappingExtensions.ToSqlValuesForInsert(values);
-        
-        string sql = @$"
-        INSERT INTO dbo.{tableName} ({columnsSql})
-        VALUES {valuesSql}";
-        
-        try
+        string versionTableSql = $@"
+            UPDATE dbo.Directory_Actual_Version
+            SET CurrentVersion = @NewVersion,
+                LastUpdate = GETDATE()
+            WHERE Code = @VersionCode";
+
+        var paramForversionTableSql = new
         {
-            // вместо Dapper тут использую ADO.NET т.к. с Dapper`ом начинается проблема из-за символа @
-            await connection.ExecuteAsync(sql, transaction: transaction);
-            
-            transaction.Commit();
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "Error inserting record to database");
-            transaction.Rollback();
-            throw;
-        }
-    }
-
-    public async Task RotateDirectoryDataAsync(string identifier, VersionInfoDto dto, DataDto dbData, CancellationToken cancellationToken)
-    {
-        using var connection = await _dbConnectionFactory.CreateConnectionAsync(cancellationToken);
-        using var transaction = connection.BeginTransaction();
-
-        const string sql =
-            """
-            INSERT INTO dbo.Directory_History (Code, Name, Version, JsonData, ArchivedAt)
-            SELECT Code, Name, CurrentVersion, JsonData, GETDATE()
-            FROM dbo.Directory_Actual WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
-            WHERE Code = @DirectoryCode
-            
-            UPDATE dbo.Directory_Actual
-            SET Name = @DirectoryName, 
-                CurrentVersion = @DirectoryVersion, 
-                JsonData = @JsonData, 
-                LastUpdate = @LastUpdate
-            WHERE Code = @DirectoryCode
-            """;
-
-        var jsonData = JsonSerializer.Serialize(dto.Passport);
-
-        var param = new
-        {
-            DirectoryCode = identifier,
-            DirectoryName = dto.Passport.Name,
-            DirectoryVersion = dto.Version,
-            JsonData = jsonData,
-            LastUpdate = dto.LastUpdate
+            VersionCode = identifier,
+            NewVersion = apiVersion.Version
         };
-
+        
         try
         {
-            await connection.ExecuteAsync(sql, param, transaction);
+            await connection.ExecuteAsync(archiveTableSql, transaction: transaction);
+            
+            await connection.ExecuteAsync(truncateActualTableSql, transaction: transaction);
 
+            await InsertRecordToDbAsync(identifier, dbData, dbStructure, cancellationToken, connection, transaction);
+            
+            await connection.ExecuteAsync(versionTableSql, paramForversionTableSql, transaction: transaction);
+            
             transaction.Commit();
         }
         catch (Exception e)
@@ -153,8 +199,8 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         CREATE TABLE {actualTable}
         (
             [Id] BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-            [SYS_RECORDID] NVARCHAR(255) NULL, 
-            [SYS_HASH] NVARCHAR(255) NULL,
+            [SYS_RECORDID] NVARCHAR(MAX) NULL, 
+            [SYS_HASH] NVARCHAR(MAX) NULL,
             {allColumnsSql}
         );
 
@@ -162,9 +208,11 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         CREATE TABLE [{historyTable}]
         (
             [Id] BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+            [SYS_RECORDID] NVARCHAR(255) NULL, 
+            [SYS_HASH] NVARCHAR(255) NULL,
             {allColumnsSql},
-            [VersionId] NVARCHAR(50) NOT NULL,
-            [Archived_Date] DATETIME NOT NULL
+            [Version] NVARCHAR(50) NOT NULL,
+            [Archive_Date] DATETIME NOT NULL
         );";
         
         try
