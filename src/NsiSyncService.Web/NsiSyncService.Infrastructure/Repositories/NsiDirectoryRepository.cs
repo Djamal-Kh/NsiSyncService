@@ -1,9 +1,7 @@
 ﻿using System.Data;
-using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.Logging;
 using NsiSyncService.Core.DTOs;
-using NsiSyncService.Core.Entities;
 using NsiSyncService.Core.Extensions;
 using NsiSyncService.Core.Interfaces;
 
@@ -38,7 +36,11 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         return record;
     }
 
-    public async Task InsertRecordToDbAsync(
+    // Этот метод вызывается как напрямую из SyncProvider, так и из метода репозитория RotateDirectoryDataAsync
+    // Поэтому здесь проверяется откуда был именно совершен вызов. Если напрямую из SyncProvider,
+    // создать транзакцию и соединение с БД, если же из метода репозитория,
+    // то тогда необходимо использовать "внешнюю" транзакцию
+    public async Task InsertRecordsToDbAsync(
         string identifier, 
         DataDto dbData, 
         StructureDto dbStructure, 
@@ -48,15 +50,18 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
     {
         IDbConnection connection = externalConnection;
         
+        // Если вызов метода напрямую из SyncProvider, то создаем соединение с БД
         if (connection is null)
             connection = await _dbConnectionFactory.CreateConnectionAsync(cancellationToken);
         
         try
         {
+            // Если метод вызывается из SyncProvider, то тогда переменная isInternalTransaction имеет значение false
             bool isInternalTransaction = externalTransaction == null;
             
             IDbTransaction transaction = externalTransaction;
             
+            // Если внешней транзакции нет (т.е. вызов был совершен из SyncProvider), то создаем ее
             if (transaction is null)
                 transaction = connection.BeginTransaction();
 
@@ -73,9 +78,8 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
                 .ToList();
 
             var columnsSql = SqlMappingExtensions.ToSqlColumnsForInsert(columns);
-
-            // переделать под List ?
-            // также здесь проходит фильтрация
+            
+            // фильтрация по столбцам, игнорируем значения которых нет в structure, но есть в values
             var values = dbData.List.Select(row =>
                 row.Where(cell => columns.Contains(cell.Column))
                     .Select(x => x.Value));
@@ -85,10 +89,10 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
             string sql = @$"
                 INSERT INTO dbo.{tableName} ({columnsSql})
                 VALUES {valuesSql}";
-
+            
+            
             try
             {
-                // вместо Dapper тут использую ADO.NET т.к. с Dapper`ом начинается проблема из-за символа @
                 await connection.ExecuteAsync(sql, transaction: transaction);
 
                 if (isInternalTransaction) 
@@ -160,7 +164,7 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
             
             await connection.ExecuteAsync(truncateActualTableSql, transaction: transaction);
 
-            await InsertRecordToDbAsync(identifier, dbData, dbStructure, cancellationToken, connection, transaction);
+            await InsertRecordsToDbAsync(identifier, dbData, dbStructure, cancellationToken, connection, transaction);
             
             await connection.ExecuteAsync(versionTableSql, paramForversionTableSql, transaction: transaction);
             
@@ -186,14 +190,12 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         var columnDefinitions = dbStructure.Columns.Select(c =>
         {
             string sqlType = SqlMappingExtensions.ToSqlType(c);
-            //string nullabillity = c.EmptyAllowed ? "NULL" : "NOT NULL"; - вынужденно т.к. даже если указано NOT NULL - приходили пустые значения
             string nullabillity = "NULL";
             return $"[{c.Name}] {sqlType} {nullabillity}";
         });
         
         string allColumnsSql = string.Join(",", columnDefinitions);
         
-        // Жесткий костыль, небезопасно так писать
         string sql = $@"
         IF OBJECT_ID('{actualTable}') IS NULL
         CREATE TABLE {actualTable}
@@ -207,7 +209,7 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         IF OBJECT_ID('{historyTable}') IS NULL
         CREATE TABLE [{historyTable}]
         (
-            [Id] BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+            [Id] BIGINT NOT NULL PRIMARY KEY,
             [SYS_RECORDID] NVARCHAR(255) NULL, 
             [SYS_HASH] NVARCHAR(255) NULL,
             {allColumnsSql},

@@ -8,7 +8,7 @@ public interface INsiDirectoryRepository
 {
     public Task<string?> GetLastVersionFromDbAsync(string identifier, CancellationToken cancellationToken);
 
-    public Task InsertRecordToDbAsync(
+    public Task InsertRecordsToDbAsync(
         string identifier, 
         DataDto dbData, 
         StructureDto dbStructure, 

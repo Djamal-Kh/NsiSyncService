@@ -1,5 +1,4 @@
-﻿using NsiSyncService.Core.DTOs;
-
+﻿
 namespace NsiSyncService.Core.Extensions;
 
 public static class SqlMappingExtensions

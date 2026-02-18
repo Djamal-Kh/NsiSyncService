@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using NsiSyncService.Core;
 using NsiSyncService.Core.Extensions.ExceptionExtensions;
 using NsiSyncService.Core.Interfaces;
 
@@ -16,7 +15,7 @@ public class NsiSyncWorker : BackgroundService
     private readonly List<string> _referenceIdentifiers = new() 
     { 
         // тестовый список для проверки версий у этих документов
-        "F001", "V022" , "F000" , "F002", "F003", "F004", "V042", "F005", "N015", "V017"
+        "F012" ,"F001", "V022" , "F000" , "F002", "F003", "F004", "V042", "F005", "N015", "V017"
     };
     
     public NsiSyncWorker(DbInitializer dbInitializer, IServiceProvider serviceProvider, ILogger<NsiSyncWorker> logger)
@@ -28,6 +27,7 @@ public class NsiSyncWorker : BackgroundService
 
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
+        // Запуск скрипта создания таблицы версий, если она не существует
         await _dbInitializer.InitializeAsync(cancellationToken);
         
         await base.StartAsync(cancellationToken);
@@ -43,20 +43,19 @@ public class NsiSyncWorker : BackgroundService
             {
                 try
                 {
-                    _logger.LogInformation("Work with Api. Processed identifier: {identifier}", identifier);
+                    _logger.LogInformation("Processed identifier: {identifier}", identifier);
                     using var scope = _serviceProvider.CreateScope();
 
                     var syncProvider = scope.ServiceProvider.GetRequiredService<ISyncProvider>();
                     await syncProvider.SyncReferenceAsync(identifier, stoppingToken);
-
+                    
                     await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
                 }
-
                 catch (ResourceNotFoundException)
                 {
-                    _logger.LogError("Failed to retrieve data from external API. Identifier: {Identifier}", identifier);
+                    _logger.LogError("Failed to retrieve data from external API. Identifier: {Identifier}", 
+                        identifier);
                 }
-                    
                 catch (Exception e)
                 {
                     _logger.LogCritical(e, "Unhandled exception");
