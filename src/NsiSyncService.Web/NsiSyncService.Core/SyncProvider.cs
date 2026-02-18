@@ -43,7 +43,7 @@ public class SyncProvider : ISyncProvider
         if (currentDbVersion is null)
         {
             await _nsiDirectoryRepository.CreateTablesAsync(identifier, apiStructure, cancellationToken);
-            await _nsiDirectoryRepository.InsertRecordToDbAsync(identifier, apiData, apiStructure, cancellationToken);
+            await _nsiDirectoryRepository.InsertRecordsToDbAsync(identifier, apiData, apiStructure, cancellationToken);
             await _nsiDirectoryRepository.AddVersionAsync(identifier, latestApiVersion, cancellationToken);
             return;
         }

@@ -40,7 +40,7 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
     // Поэтому здесь проверяется откуда был именно совершен вызов. Если напрямую из SyncProvider,
     // создать транзакцию и соединение с БД, если же из метода репозитория,
     // то тогда необходимо использовать "внешнюю" транзакцию
-    public async Task InsertRecordToDbAsync(
+    public async Task InsertRecordsToDbAsync(
         string identifier, 
         DataDto dbData, 
         StructureDto dbStructure, 
@@ -164,7 +164,7 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
             
             await connection.ExecuteAsync(truncateActualTableSql, transaction: transaction);
 
-            await InsertRecordToDbAsync(identifier, dbData, dbStructure, cancellationToken, connection, transaction);
+            await InsertRecordsToDbAsync(identifier, dbData, dbStructure, cancellationToken, connection, transaction);
             
             await connection.ExecuteAsync(versionTableSql, paramForversionTableSql, transaction: transaction);
             
@@ -209,7 +209,7 @@ public class NsiDirectoryRepository : INsiDirectoryRepository
         IF OBJECT_ID('{historyTable}') IS NULL
         CREATE TABLE [{historyTable}]
         (
-            [Id] BIGINT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+            [Id] BIGINT NOT NULL PRIMARY KEY,
             [SYS_RECORDID] NVARCHAR(255) NULL, 
             [SYS_HASH] NVARCHAR(255) NULL,
             {allColumnsSql},
